@@ -1,0 +1,8 @@
+INTSTYLE=ise
+INFILE=C:\Users\zoltanp\Documents\HexCalc\MiniMax8085\sys_sbc8085\Anvyl\sys_sbc8085.ncd
+OUTFILE=C:\Users\zoltanp\Documents\HexCalc\MiniMax8085\sys_sbc8085\Anvyl\sys_sbc8085.bit
+FAMILY=Spartan6
+PART=xc6slx45-3csg484
+WORKINGDIR=C:\Users\zoltanp\Documents\HexCalc\MiniMax8085\sys_sbc8085\Anvyl
+LICENSE=WebPack
+USER_INFO=210994392_0_0_816

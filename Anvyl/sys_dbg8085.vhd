@@ -31,6 +31,7 @@ use IEEE.NUMERIC_STD.ALL;
 -- any Xilinx leaf cells in this code.
 --library UNISIM;
 --use UNISIM.VComponents.all;
+use work.sys_dbg8085_package.all;
 
 entity sys_dbg8085 is
     Port ( 
@@ -58,33 +59,33 @@ entity sys_dbg8085 is
 				JA2: inout std_logic;	-- Connected to USB2UART
 				JA3: inout std_logic;	-- Connected to USB2UART
 				JA4: inout std_logic;	-- Connected to USB2UART
-				JB1: in std_logic;	-- BLUE S0
-				JB2: in std_logic;	-- BLUE S1
-				JB3: in std_logic;	-- BLUE IO/M
-				JB4: in std_logic;	-- GRAY ALE
-				JB7: in std_logic;	-- GRAY CLK
-				JB8: in std_logic;	-- GRAY RST -- reset out from CPU, high active
-				JB9: in std_logic;	-- GRAY NC
-				JB10: in std_logic;	-- GRAY NC
-				JC1: in std_logic;	-- WHITE 8085.21	A8
-				JC2: in std_logic;	-- WHITE 8085.22	A9
-				JC3: in std_logic;	-- WHITE 8085.23	A10
-				JC4: in std_logic;	-- WHITE 8085.24	A11
-				JC7: in std_logic;	-- WHITE 8085.25	A12
-				JC8: in std_logic;	-- WHITE 8085.26	A13
-				JC9: in std_logic;	-- WHITE 8085.27	A14
-				JC10: in std_logic;	-- WHITE 8085.28	A15
+				JB1: in std_logic;	-- GREEN S0
+				JB2: in std_logic;	-- GREEN S1
+				JB3: in std_logic;	-- GREEN IOM
+				JB4: in std_logic;	-- GREEN ALE
+				JB7: in std_logic;	-- YELLOW CLK
+				JB8: in std_logic;	-- ORANGE RST -- reset out from CPU, high active
+				JB9: in std_logic;	-- 
+				JB10: in std_logic;	-- 
+				JC1: in std_logic;	-- GRAY A8
+				JC2: in std_logic;	-- GRAY A9
+				JC3: in std_logic;	-- GRAY A10
+				JC4: in std_logic;	-- GRAY A11
+				JC7: in std_logic;	-- GRAY A12
+				JC8: in std_logic;	-- GRAY A13
+				JC9: in std_logic;	-- GRAY A14
+				JC10: in std_logic;	-- GRAY A15
 				-- breadboard signal connections
-				BB1: in std_logic;	-- BLUE 8085.12 AD0
-				BB2: in std_logic;	-- BLUE 8085.13 AD1
-				BB3: in std_logic;	-- BLUE 8085.14 AD2
-				BB4: in std_logic;	-- BLUE 8085.15 AD3
-				BB5: in std_logic;	-- BLUE 8085.16 AD4
-				BB6: in std_logic;	-- BLUE 8085.17 AD5
-				BB7: in std_logic;	-- BLUE 8085.18 AD6
-				BB8: in std_logic;	-- BLUE 8085.19 AD7
-				BB9: out std_logic;		-- ORANGE	TRAP
-				BB10: out std_logic;		-- YELLOW	READY
+				BB1: inout std_logic;	-- WHITE AD0
+				BB2: inout std_logic;	-- WHITE AD1
+				BB3: inout std_logic;	-- WHITE AD2
+				BB4: inout std_logic;	-- WHITE AD3
+				BB5: inout std_logic;	-- WHITE AD4
+				BB6: inout std_logic;	-- WHITE AD5
+				BB7: inout std_logic;	-- WHITE AD6
+				BB8: inout std_logic;	-- WHITE AD7
+				BB9: out std_logic;		-- BLUE	RST7.5
+				BB10: out std_logic;		-- PURPLE	READY
 				--DIP switches
 				DIP_B4, DIP_B3, DIP_B2, DIP_B1: in std_logic;
 				DIP_A4, DIP_A3, DIP_A2, DIP_A1: in std_logic;
@@ -149,6 +150,10 @@ component uart_par2ser is
 end component;
 
 component tracer is
+	Generic (
+			traceformat : rom32x8;
+			flag2char:	rom16x8
+			);
     Port ( reset : in  STD_LOGIC;
            clk : in  STD_LOGIC;
            start : in  STD_LOGIC;
@@ -268,17 +273,6 @@ signal prescale_baud, prescale_power: integer range 0 to 65535;
 -- input by switches and buttons
 signal switch_old: std_logic_vector(7 downto 0);
 signal switch, button: std_logic_vector(7 downto 0);
---alias switch_sel:	std_logic_vector(1 downto 0) is switch(7 downto 6);
---signal btn_command, btn_window: std_logic_vector(3 downto 0);
---signal page_sel: std_logic_vector(7 downto 0);
---alias dip_iom: std_logic is DIP_B4; 
---alias dip_traceerror: std_logic is DIP_B3; 
---alias dip_tracewrite: std_logic is DIP_B2; 
---alias dip_tracechar: std_logic is DIP_B1; 
---alias dip_page16k3: std_logic is DIP_A4; 
---alias dip_page16k2: std_logic is DIP_A3; 
---alias dip_page16k1: std_logic is DIP_A2; 
---alias dip_page16k0: std_logic is DIP_A1;
 
 -- common 
 signal baudrate_x1, baudrate_x2, baudrate_x4, baudrate_x8: std_logic;
@@ -301,11 +295,13 @@ alias IOM: std_logic is JB3;
 alias ALE: std_logic is JB4;
 alias CPUCLK: std_logic is JB7;
 alias RST: std_logic is JB8;
-alias TRAP: std_logic is BB9;
+alias nINTA: std_logic is JB9;
+alias RST75: std_logic is BB9;
 alias READY: std_logic is BB10;
 signal ABUS: std_logic_vector(15 downto 0);
 signal DBUS: std_logic_vector(7 downto 0);
-signal SBUS, SBUS1: std_logic_vector(2 downto 0);
+--alias DOUT: std_logic_vector(7 downto 0) is switch;
+signal SBUS: std_logic_vector(2 downto 0);
 
 -- ready logic
 signal rdy_ff, rdy_ff_clk, freeze, thaw: std_logic;
@@ -375,7 +371,7 @@ baudgen: sn74hc4040 port map (
 counter: freqcounter Port map ( 
 		reset => RESET,
       clk => freq_2048(11),
-      freq => ALE, --CPUCLK,
+      freq => CPUCLK,
 		bcd => '1',
 		add => X"00000001",
 		cin => '1',
@@ -393,13 +389,21 @@ ABUS(13) <= JC8;
 ABUS(14) <= JC9;
 ABUS(15) <= JC10;
 
+--BB1 <= DOUT(0) when (nRD = '0') else 'Z';
 DBUS(0) <= BB1;
+--BB2 <= DOUT(1) when (nRD = '0') else 'Z';
 DBUS(1) <= BB2;
+--BB3 <= DOUT(2) when (nRD = '0') else 'Z';
 DBUS(2) <= BB3;
+--BB4 <= DOUT(3) when (nRD = '0') else 'Z';
 DBUS(3) <= BB4;
+--BB5 <= DOUT(4) when (nRD = '0') else 'Z';
 DBUS(4) <= BB5;
+--BB6 <= DOUT(5) when (nRD = '0') else 'Z';
 DBUS(5) <= BB6;
+--BB7 <= DOUT(6) when (nRD = '0') else 'Z';
 DBUS(6) <= BB7;
+--BB8 <= DOUT(7) when (nRD = '0') else 'Z';
 DBUS(7) <= BB8;
 
 -- capture low address bus as ALE goes low
@@ -407,59 +411,105 @@ on_ALE: process(ALE, DBUS)
 begin
 	if (falling_edge(ALE)) then
 		ABUS(7 downto 0) <= DBUS;
+--		"SBUS" is handy 3-bit indicator of the access;
+		SBUS <= IOM & S1 & S0;
 	end if;
 end process;
 
---on_CPUCLK: process(CPUCLK, SBUS)
---begin
---	if (falling_edge(CPUCLK)) then
---		--SBUS1 <= SBUS;	-- capture control lines twice
---		--SBUS <= IOM & nRD & nWR;
---		--READY <= rdy_ff;
---	end if;
---end process;
-
--- "SBUS" is handy 3-bit indicator of the access;
-SBUS <= IOM & S1 & S0;
- 
-TRAP <= button(3);
-READY <= rdy_ff;
-
---freeze <= button(1); --switch(to_integer(unsigned(SBUS)));-- when ((nRD and nWR) = '0') else '0';
-rdy_ff_clk <= button(0);--freeze when (rdy_ff = '1') else button(0); --thaw;
-
-on_rdy_ff_clk: process(reset, rdy_ff_clk)
+on_CPUCLK: process(CPUCLK, SBUS, reset)
 begin
-	if ((ALE and switch(to_integer(unsigned(SBUS)))) = '1') then
-		rdy_ff <= not RST;
+	if (reset = '1') then 
+		rdy_ff <= '1';
 	else
-		if (rising_edge(rdy_ff_clk)) then
-			rdy_ff <= '1'; --not rdy_ff;
+		if (falling_edge(CPUCLK)) then
+			if ((thaw and button(0)) = '1') then
+				rdy_ff <= '1';
+			else
+				rdy_ff <= not switch(to_integer(unsigned(SBUS)));
+			end if;
 		end if;
 	end if;
 end process;
+ 
+RST75 <= button(3);
+READY <= rdy_ff;
 
 --continue <= tx_ready when (DIP_B4 = '0') else tty_sent;
---tr: tracer Port map ( 
---			reset => rdy_ff,
---			clk => baudrate_x1,
---			start => button(0),
---			continue => button(1),
---			data(15 downto 0) => ABUS,
---			data(23 downto 16) => DBUS,
---			data(31 downto 24) => X"00", -- not used
---			flags(7) => '0',	-- trick to display 2 characters per 1 flag
---			flags(6) => '0',
---			flags(5) => S0,
---			flags(4) => S0,
---			flags(3) => S1,
---			flags(2) => S1,
---			flags(1) => IOM,	
---			flags(0) => IOM,	
---			tracechar => tracechar,
---			tracechar_send => tracechar_send,
---			trace_done => thaw
---		);
+tr: tracer 
+		Generic map (
+			traceformat => (
+				get_byte('>'), 	
+				X"C0",	
+				X"C1",	
+				get_byte(' '), 	
+				X"C2",	
+				X"C3",	
+				get_byte(' '),	
+				X"C4",
+				X"C5",	
+				get_byte(' '),	
+				X"C6",
+				X"C7",	
+				get_byte(' '),	
+				get_byte('A'),	
+				get_byte('='), 	
+				X"83",	
+				X"82",	
+				X"81",	
+				X"80",	
+				get_byte(' '),
+				get_byte('D'),	
+				get_byte('='),	
+				X"85",	
+				X"84",	
+				get_byte(' '),	
+				X"0A",	-- LF	
+				X"0D",	-- CR	
+				X"00",	-- done
+				X"00",	-- done
+				X"00",	-- done
+				X"00",	-- done
+				get_byte(' ')	-- last entry must be !=0
+				),
+			flag2char => (
+				get_byte('M'),	-- flag 0, value 0
+				get_byte(' '),	
+				get_byte(' '), 	
+				get_byte(' '),	
+				get_byte(' '),	
+				get_byte(' '),	
+				get_byte('I'),	
+				get_byte('A'), -- flag 7, value 0
+				get_byte('I'),	-- flag 0, value 1	
+				get_byte('O'),	
+				get_byte('S'), 	
+				get_byte('1'),	
+				get_byte('S'),	
+				get_byte('0'),	
+				get_byte(' '),	
+				get_byte(' ')	-- flag 7, value 1
+				)
+		)
+		Port map ( 
+			reset => rdy_ff,
+			clk => baudrate_x1,
+			start => freq_2048(6),
+			continue => not freq_2048(6),
+			data(15 downto 0) => ABUS,
+			data(23 downto 16) => DBUS,
+			data(31 downto 24) => X"00", -- not used
+			flags(7) => nINTA,	-- trick to display 2 characters per 1 flag
+			flags(6) => nINTA,
+			flags(5) => S0,
+			flags(4) => S0,
+			flags(3) => S1,
+			flags(2) => S1,
+			flags(1) => IOM,	
+			flags(0) => IOM,	
+			tracechar => tracechar,
+			tracechar_send => tracechar_send,
+			trace_done => thaw
+		);
 
 -- blinkenlights
 LDT1G <= S1;
